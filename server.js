@@ -8,6 +8,7 @@ import { newGame, play } from './public/game.js';
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const assets = new Map([
   ['/', [new URL('./public/index.html', import.meta.url), 'text/html; charset=utf-8']],
+  ['/favicon.png', [new URL('./public/favicon.png', import.meta.url), 'image/png']],
   ['/style.css', [new URL('./public/style.css', import.meta.url), 'text/css; charset=utf-8']],
   ['/app.js', [new URL('./public/app.js', import.meta.url), 'text/javascript; charset=utf-8']],
   ['/game.js', [new URL('./public/game.js', import.meta.url), 'text/javascript; charset=utf-8']],
