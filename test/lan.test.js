@@ -65,6 +65,15 @@ test('the deployment entry exports an HTTP server that serves the game', async t
   assert.match(await response.text(), /<title>Tic Tac Toe/);
 });
 
+test('Vercel sends homepage and invite requests to the deployed HTML asset', async t => {
+  const { origin } = await launch(t, { onVercel: true });
+  for (const path of ['/', '/?join=ABC234']) {
+    const response = await fetch(`${origin}${path}`, { redirect: 'manual' });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('Location'), `/index.html${new URL(path, origin).search}`);
+  }
+});
+
 test('a hosted HTTPS origin can play through an HTTP proxy', async t => {
   const publicOrigin = 'https://game.example.com';
   const { post, listen } = await launch(t, { publicOrigin });

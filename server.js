@@ -128,6 +128,12 @@ export function createGameServer({ heartbeatMs = 4000, presenceTimeoutMs = 15000
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Content-Security-Policy', "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
 
+    if (onVercel && url.pathname === '/' && (request.method === 'GET' || request.method === 'HEAD')) {
+      response.writeHead(302, { Location: `/index.html${url.search}` });
+      response.end();
+      return;
+    }
+
     const asset = assets.get(url.pathname);
     if (asset && (request.method === 'GET' || request.method === 'HEAD')) {
       const [filename, contentType] = asset;
