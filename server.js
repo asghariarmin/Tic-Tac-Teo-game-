@@ -7,11 +7,11 @@ import { newGame, play } from './public/game.js';
 
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const assets = new Map([
-  ['/', ['index.html', 'text/html; charset=utf-8']],
-  ['/style.css', ['style.css', 'text/css; charset=utf-8']],
-  ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
-  ['/game.js', ['game.js', 'text/javascript; charset=utf-8']],
-  ['/sound.js', ['sound.js', 'text/javascript; charset=utf-8']],
+  ['/', [new URL('./public/index.html', import.meta.url), 'text/html; charset=utf-8']],
+  ['/style.css', [new URL('./public/style.css', import.meta.url), 'text/css; charset=utf-8']],
+  ['/app.js', [new URL('./public/app.js', import.meta.url), 'text/javascript; charset=utf-8']],
+  ['/game.js', [new URL('./public/game.js', import.meta.url), 'text/javascript; charset=utf-8']],
+  ['/sound.js', [new URL('./public/sound.js', import.meta.url), 'text/javascript; charset=utf-8']],
 ]);
 
 class RequestError extends Error {
@@ -118,7 +118,7 @@ function openStream(response, room, mark) {
   publish(room);
 }
 
-export function createGameServer({ heartbeatMs = 4000, presenceTimeoutMs = 15000, publicOrigin } = {}) {
+export function createGameServer({ heartbeatMs = 4000, presenceTimeoutMs = 15000, publicOrigin, onVercel = false } = {}) {
   const rooms = new Map();
 
   async function handle(request, response) {
@@ -131,13 +131,13 @@ export function createGameServer({ heartbeatMs = 4000, presenceTimeoutMs = 15000
     const asset = assets.get(url.pathname);
     if (asset && (request.method === 'GET' || request.method === 'HEAD')) {
       const [filename, contentType] = asset;
-      const content = await readFile(new URL(`./public/${filename}`, import.meta.url));
+      const content = await readFile(filename);
       response.writeHead(200, { 'Content-Type': contentType, 'Content-Length': content.length });
       response.end(request.method === 'HEAD' ? undefined : content);
       return;
     }
 
-    const allowedOrigin = publicOrigin ?? `http://${request.headers.host}`;
+    const allowedOrigin = publicOrigin ?? `${onVercel ? 'https' : 'http'}://${request.headers.host}`;
     if (request.method === 'POST' && request.headers.origin && request.headers.origin !== allowedOrigin) {
       throw new RequestError(403, 'Open the game from the same address as the room host.');
     }
@@ -152,7 +152,7 @@ export function createGameServer({ heartbeatMs = 4000, presenceTimeoutMs = 15000
       const host = makePlayer();
       const room = { code, players: { X: host, O: null }, game: newGame(), round: 1, version: 0, closedBy: null };
       rooms.set(code, room);
-      const lanAddress = publicOrigin ? null : lanAddresses()[0] ?? null;
+      const lanAddress = publicOrigin || onVercel ? null : lanAddresses()[0] ?? null;
       json(response, 201, { mark: 'X', token: host.token, state: snapshot(room), lanAddress });
       return;
     }
@@ -244,22 +244,26 @@ export function createGameServer({ heartbeatMs = 4000, presenceTimeoutMs = 15000
   return server;
 }
 
+function readPublicOrigin(value) {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    if (['http:', 'https:'].includes(url.protocol) && url.pathname === '/' && !url.search && !url.hash && !url.username && !url.password) {
+      return url.origin;
+    }
+  } catch {
+    // Report invalid URLs and unsupported URL forms with the same message.
+  }
+  throw new Error('Set PUBLIC_ORIGIN to the full site origin, for example https://game.example.com.');
+}
+
+const onVercel = process.env.VERCEL === '1';
+const publicOrigin = readPublicOrigin(onVercel ? undefined : process.env.PUBLIC_ORIGIN);
+const server = createGameServer({ publicOrigin, onVercel });
+export default server;
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.env.PORT ?? 3000);
-  let publicOrigin;
-  if (process.env.PUBLIC_ORIGIN) {
-    try {
-      const url = new URL(process.env.PUBLIC_ORIGIN);
-      if (!['http:', 'https:'].includes(url.protocol) || url.pathname !== '/' || url.search || url.hash || url.username || url.password) {
-        throw new Error();
-      }
-      publicOrigin = url.origin;
-    } catch {
-      console.error('Set PUBLIC_ORIGIN to the full site origin, for example https://game.example.com.');
-      process.exit(1);
-    }
-  }
-  const server = createGameServer({ publicOrigin });
   if (process.env.PIXEL_ARCADE_DESKTOP === '1') {
     process.stdin.once('end', () => process.exit());
     process.stdin.resume();

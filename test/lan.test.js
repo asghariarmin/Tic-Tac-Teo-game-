@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import test from 'node:test';
-import { createGameServer } from '../server.js';
+import vercelEntry, { createGameServer } from '../server.js';
 
 async function launch(t, options) {
-  const server = createGameServer(options);
+  const server = options?.server ?? createGameServer(options);
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const origin = `http://127.0.0.1:${server.address().port}`;
@@ -56,6 +56,14 @@ async function launch(t, options) {
 
   return { origin, post, listen };
 }
+
+test('the deployment entry exports an HTTP server that serves the game', async t => {
+  assert.equal(vercelEntry.listening, false);
+  const { origin } = await launch(t, { server: vercelEntry });
+  const response = await fetch(`${origin}/?join=ABC234`);
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /<title>Tic Tac Toe/);
+});
 
 test('a hosted HTTPS origin can play through an HTTP proxy', async t => {
   const publicOrigin = 'https://game.example.com';
